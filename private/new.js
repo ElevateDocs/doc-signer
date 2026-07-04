@@ -218,7 +218,7 @@ submitBtn.addEventListener('click', async () => {
     let fileBase64, flatFields;
 
     if (fileType === 'pdf') {
-      const srcDoc = await PDFLib.PDFDocument.load(originalArrayBuffer);
+     const srcDoc = await PDFLib.PDFDocument.load(originalArrayBuffer, { ignoreEncryption: true });
       const newDoc = await PDFLib.PDFDocument.create();
       flatFields = [];
       for (let newIndex = 0; newIndex < includedPages.length; newIndex++) {
