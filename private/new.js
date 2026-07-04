@@ -58,9 +58,14 @@ async function renderPdf(buffer) {
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1 });
-    const targetWidth = 680;
-    const scale = targetWidth / viewport.width;
+    const baseViewport = page.getViewport({ scale: 1 });
+    // Render at a higher resolution than the on-screen display width - the
+    // page shrinks to fit its container via CSS, but we keep the extra
+    // detail for the final document (this canvas doubles as the source
+    // image for the PDF we build at submit time, since some source PDFs
+    // are protected in ways that block copying their pages directly).
+    const targetWidth = 1000;
+    const scale = targetWidth / baseViewport.width;
     const scaledViewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
@@ -69,7 +74,7 @@ async function renderPdf(buffer) {
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
 
-    addPageBlock(i, canvas);
+    addPageBlock(i, canvas, baseViewport.width, baseViewport.height);
   }
 }
 
@@ -90,7 +95,7 @@ async function renderImage(file) {
   addPageBlock(1, canvas);
 }
 
-function addPageBlock(pageNumber, canvas) {
+function addPageBlock(pageNumber, canvas, pointWidth, pointHeight) {
   const block = document.createElement('div');
   block.className = 'page-block';
 
@@ -103,7 +108,20 @@ function addPageBlock(pageNumber, canvas) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = true;
-  const pageState = { pageNumber, included: true, wrapperEl: null, widthPx: canvas.width, heightPx: canvas.height, fields: [] };
+  const pageState = {
+    pageNumber,
+    included: true,
+    wrapperEl: null,
+    canvasEl: canvas,
+    widthPx: canvas.width,
+    heightPx: canvas.height,
+    // Point dimensions (1/72 inch) the final PDF page should use. Falls
+    // back to pixel dimensions for plain images, where "points" don't
+    // really apply - it just needs to be a consistent aspect ratio.
+    pointWidth: pointWidth || canvas.width,
+    pointHeight: pointHeight || canvas.height,
+    fields: [],
+  };
   check.addEventListener('change', () => {
     pageState.included = check.checked;
     wrapper.style.opacity = check.checked ? '1' : '0.35';
@@ -218,13 +236,20 @@ submitBtn.addEventListener('click', async () => {
     let fileBase64, flatFields;
 
     if (fileType === 'pdf') {
-     const srcDoc = await PDFLib.PDFDocument.load(originalArrayBuffer, { ignoreEncryption: true });
+      // Build a brand-new PDF from rendered page images rather than copying
+      // pages out of the original. Some source PDFs (e.g. government forms)
+      // use content protection that pdf-lib can flag past but can't fully
+      // decrypt, which silently produces blank/broken pages. Rendering with
+      // pdf.js (which already handles these correctly) and re-embedding as
+      // images sidesteps that entirely.
       const newDoc = await PDFLib.PDFDocument.create();
       flatFields = [];
       for (let newIndex = 0; newIndex < includedPages.length; newIndex++) {
         const p = includedPages[newIndex];
-        const [copiedPage] = await newDoc.copyPages(srcDoc, [p.pageNumber - 1]);
-        newDoc.addPage(copiedPage);
+        const pngBytes = await canvasToPngBytes(p.canvasEl);
+        const pngImage = await newDoc.embedPng(pngBytes);
+        const newPage = newDoc.addPage([p.pointWidth, p.pointHeight]);
+        newPage.drawImage(pngImage, { x: 0, y: 0, width: p.pointWidth, height: p.pointHeight });
         for (const f of p.fields) {
           flatFields.push({ id: f.id, page: newIndex, xRatio: f.xRatio, yRatio: f.yRatio, wRatio: f.wRatio, hRatio: f.hRatio, label: 'Signature' });
         }
@@ -294,6 +319,18 @@ document.getElementById('copyLinkBtn').addEventListener('click', () => {
 function showError(msg) {
   submitError.textContent = msg;
   submitError.style.display = 'block';
+}
+
+function canvasToPngBytes(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error('Could not export page image.'));
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result));
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    }, 'image/png');
+  });
 }
 
 function arrayBufferToBase64(buffer) {
