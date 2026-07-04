@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Sign Document</title>
+<link rel="stylesheet" href="/style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">📝 Document Signer</div>
+</div>
+
+<div class="wrap" id="app">
+  <div class="center-note" id="loadingNote">
+    <div class="spinner" style="margin: 0 auto 12px;"></div>
+    Loading document…
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script src="/sign.js"></script>
+</body>
+</html>
