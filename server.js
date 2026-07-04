@@ -59,9 +59,12 @@ const documentSchema = new mongoose.Schema({
 
 const Document = mongoose.model('Document', documentSchema);
 
-// A generous but safe cap. Base64 inflates size ~33%, and we store the
-// original + signed copy of the doc, so keep originals modest in size.
-const MAX_FILE_BASE64_CHARS = 7 * 1024 * 1024; // ~5MB raw file
+// MongoDB caps a single document at 16MB, and we store the original AND the
+// signed copy in the same record, so each one gets its own independent
+// budget with headroom to spare (rather than one cap doubled, which could
+// push the pair of them over the 16MB ceiling).
+const MAX_FILE_BASE64_CHARS = 6 * 1024 * 1024; // ~4.5MB raw file
+const MAX_SIGNED_BASE64_CHARS = 6 * 1024 * 1024; // ~4.5MB raw file
 
 // ---------- Auth for your private pages (dashboard + "new document") ----------
 
@@ -149,7 +152,7 @@ app.post('/api/documents', requireAuth, async (req, res) => {
     }
     if (fileBase64.length > MAX_FILE_BASE64_CHARS) {
       return res.status(400).json({
-        error: 'That document is too large. Please keep documents under ~5MB.',
+        error: 'That document is too large. Try sending fewer pages, or keep it under ~4-5MB.',
       });
     }
     if (!Array.isArray(fields) || fields.length === 0) {
@@ -222,7 +225,7 @@ app.post('/api/public/documents/:id/complete', async (req, res) => {
     if (!signedFileBase64) {
       return res.status(400).json({ error: 'Missing signed file.' });
     }
-    if (signedFileBase64.length > MAX_FILE_BASE64_CHARS * 2) {
+    if (signedFileBase64.length > MAX_SIGNED_BASE64_CHARS) {
       return res.status(400).json({ error: 'Signed file is too large.' });
     }
 
