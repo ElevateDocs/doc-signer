@@ -343,7 +343,7 @@ async function completeSigning() {
 
     if (docData.fileType === 'pdf') {
       const bytes = base64ToArrayBuffer(docData.fileBase64);
-     const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
       for (const field of docData.fields) {
         const dataUrl = signatures[field.id];
         const pngBytes = base64ToArrayBuffer(dataUrl.split(',')[1]);
